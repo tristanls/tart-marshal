@@ -96,7 +96,6 @@ marshal.domain = function domain(name, transport) {
         };
         var parsed = remote.split('#');
         var address = parsed[0] + '#' + parsed[1].split('?')[0];
-        console.log(address);
         tokenMap[address] = tokenMap[remote];
     };
 
