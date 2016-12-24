@@ -89,6 +89,7 @@ marshal.domain = function domain(name, transport) {
         try {
             sharedKey = encryption.scalarMultiplication(tokenMap[message.address].keyPair.secretKey, ephemeralPublicKey);
             plaintext = encryption.decrypt(Buffer.from(message.content, "base64"), nonce, sharedKey).toString("utf8");
+            if (!plaintext) { throw Error(); }
         } catch (error) {
             throw Error('Decryption failed: ' + JSON.stringify(message));
         }
