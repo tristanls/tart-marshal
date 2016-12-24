@@ -94,6 +94,10 @@ marshal.domain = function domain(name, transport) {
             keyPair,
             local
         };
+        var parsed = remote.split('#');
+        var address = parsed[0] + '#' + parsed[1].split('?')[0];
+        console.log(address);
+        tokenMap[address] = tokenMap[remote];
     };
 
     var localToRemote = function localToRemote(local) {
@@ -110,28 +114,31 @@ marshal.domain = function domain(name, transport) {
         return remote;
     };
     var generateToken = function generateToken(publicKey) {
-        return self.name + '#' + generateCapability(publicKey);
+        return self.name + '#' + generateCapability() + '?' + publicKey.toString('base64');
     };
-    var generateCapability = function generateCapability(publicKey) {
-        return Buffer.concat([marshal.randomBytes(10), publicKey]).toString('base64');
+    var generateCapability = function generateCapability() {
+        return marshal.randomBytes(42).toString('base64');
     };
 
     var remoteToLocal = function remoteToLocal(remote) {
         var local = tokenMap[remote] && tokenMap[remote].local;
         if (local === undefined) {
-            local = newProxy(remote);  // create new proxy function
-            bindLocal(remote, undefined, local); // remote public key is in "remote" token for now
+            var parsed = remote.split('?');
+            if (parsed.length != 2) { throw Error('Bad address format: ' + remote); }
+            var address = parsed[0];
+            var remotePublicKey = Buffer.from(parsed[1], 'base64');
+            local = newProxy(address, remotePublicKey);  // create new proxy function
+            bindLocal(remote, { publicKey: remotePublicKey }, local);
         }
         return local;
     };
-    var newProxy = function newProxy(remote) {
+    var newProxy = function newProxy(address, remotePublicKey) {
         return function proxy(message) {
             var ephemeralKeyPair = encryption.scalarMultiplicationKeyPair(marshal.randomBytes(KEY_LENGTH_IN_BYTES));
-            var remotePublicKey = Buffer.from(remote.split("#")[1], "base64").slice(10);
             var sharedKey = encryption.scalarMultiplication(ephemeralKeyPair.secretKey, remotePublicKey);
             var nonce = marshal.randomBytes(NONCE_LENGTH_IN_BYTES);
             self.transport({
-                address: remote,
+                address,
                 content: encryption.encrypt(Buffer.from(encode(message), "utf8"), nonce, sharedKey).toString("base64"),
                 nonce: Buffer.concat([nonce, ephemeralKeyPair.publicKey]).toString("base64")
             });
