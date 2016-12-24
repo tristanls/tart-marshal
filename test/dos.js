@@ -30,6 +30,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 */
 "use strict";
 
+var crypto = require("crypto");
 var marshal = require('../index.js');
 var tart = require('tart-stepping');
 
@@ -47,8 +48,36 @@ test['default receptionist should not create proxies for unknown inbound address
             content: '"boom!"'
         });
     } catch (error) {
-        test.equal(error.message, 
+        test.equal(error.message,
             "Unknown address: tcp://localhost:1000/#doesnotexist");
+    }
+
+    test.done();
+};
+
+test['default receptionist throws when decryption fails'] = function (test) {
+    test.expect(1);
+    var stepping = tart.stepping();
+    var sponsor = stepping.sponsor;
+
+    var network = marshal.router();
+    var domain = network.domain('ocap:zero');
+
+    var actor = sponsor(function () {});
+
+    var remote = domain.localToRemote(actor);
+    var parsed = remote.split('#');
+    var address = parsed[0] + '#' + parsed[1].split('?')[0];
+
+    var message = {
+        address,
+        content: 'definitely not encrypted',
+        nonce: crypto.randomBytes(10).toString("base64")
+    };
+    try {
+        domain.receptionist(message);
+    } catch (error) {
+        test.equal(error.message, "Decryption failed: " + JSON.stringify(message));
     }
 
     test.done();

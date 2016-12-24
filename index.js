@@ -85,8 +85,14 @@ marshal.domain = function domain(name, transport) {
         var nonceBuffer = Buffer.from(message.nonce, "base64");
         var nonce = nonceBuffer.slice(0, NONCE_LENGTH_IN_BYTES);
         var ephemeralPublicKey = nonceBuffer.slice(NONCE_LENGTH_IN_BYTES);
-        var sharedKey = encryption.scalarMultiplication(tokenMap[message.address].keyPair.secretKey, ephemeralPublicKey);
-        local(decode(encryption.decrypt(Buffer.from(message.content, "base64"), nonce, sharedKey).toString("utf8")));
+        var sharedKey, plaintext;
+        try {
+            sharedKey = encryption.scalarMultiplication(tokenMap[message.address].keyPair.secretKey, ephemeralPublicKey);
+            plaintext = encryption.decrypt(Buffer.from(message.content, "base64"), nonce, sharedKey).toString("utf8");
+        } catch (error) {
+            throw Error('Decryption failed: ' + JSON.stringify(message));
+        }
+        local(decode(plaintext));
     };
 
     var bindLocal = function bindLocal(remote, keyPair, local) {
