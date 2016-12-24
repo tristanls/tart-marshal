@@ -34,6 +34,7 @@ var crypto = require("crypto");
 var encryption = require("sodium-encryption");
 var marshal = module.exports;
 
+var KEY_LENGTH_IN_BYTES = encryption.key().length;
 var NONCE_LENGTH_IN_BYTES = encryption.nonce().length;
 
 marshal.randomBytes = crypto.randomBytes;
@@ -103,7 +104,7 @@ marshal.domain = function domain(name, transport) {
             }
         }
         /* not found, create a new entry */
-        var keyPair = encryption.scalarMultiplicationKeyPair(); // FIXME: re-introduced non-determinism because it bypasses marshal.randomBytes()
+        var keyPair = encryption.scalarMultiplicationKeyPair(marshal.randomBytes(KEY_LENGTH_IN_BYTES));
         remote = generateToken(keyPair.publicKey);
         bindLocal(remote, keyPair, local);
         return remote;
@@ -118,7 +119,7 @@ marshal.domain = function domain(name, transport) {
     var remoteToLocal = function remoteToLocal(remote) {
         var local = tokenMap[remote] && tokenMap[remote].local;
         if (local === undefined) {
-            var keyPair = encryption.scalarMultiplicationKeyPair(); // FIXME: re-introduced non-determinism because it bypasses marshal.randomBytes()
+            var keyPair = encryption.scalarMultiplicationKeyPair(marshal.randomBytes(KEY_LENGTH_IN_BYTES));
             local = newProxy(remote, keyPair);  // create new proxy function
             bindLocal(remote, keyPair, local);
         }
@@ -126,10 +127,10 @@ marshal.domain = function domain(name, transport) {
     };
     var newProxy = function newProxy(remote, keyPair) {
         return function proxy(message) {
-            var ephemeralKeyPair = encryption.scalarMultiplicationKeyPair(); // FIXME: re-introduced non-determinism because it bypasses marshal.randomBytes()
+            var ephemeralKeyPair = encryption.scalarMultiplicationKeyPair(marshal.randomBytes(KEY_LENGTH_IN_BYTES));
             var remotePublicKey = Buffer.from(remote.split("#")[1], "base64").slice(10);
             var sharedKey = encryption.scalarMultiplication(ephemeralKeyPair.secretKey, remotePublicKey);
-            var nonce = encryption.nonce(); // FIXME: re-introduced non-determinism because it bypasses marshal.randomBytes()
+            var nonce = marshal.randomBytes(NONCE_LENGTH_IN_BYTES);
             self.transport({
                 address: remote,
                 content: encryption.encrypt(Buffer.from(encode(message), "utf8"), nonce, sharedKey).toString("base64"),
