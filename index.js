@@ -128,10 +128,10 @@ marshal.domain = function domain(name, transport) {
     var remoteToLocal = function remoteToLocal(remote) {
         var local = tokenMap[remote] && tokenMap[remote].local;
         if (local === undefined) {
-            var parsed = remote.split('?');
-            if (parsed.length != 2) { throw Error('Bad address format: ' + remote); }
-            var address = parsed[0];
-            var remotePublicKey = Buffer.from(parsed[1], 'base64');
+            var parsed = remote.split('#');
+            var parsedHarder = parsed[1].split('?');
+            var address = parsed[0] + '#' + parsedHarder[0];
+            var remotePublicKey = Buffer.from(parsedHarder[1], 'base64');
             local = newProxy(address, remotePublicKey);  // create new proxy function
             bindLocal(remote, { publicKey: remotePublicKey }, local);
         }
