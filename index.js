@@ -119,13 +119,12 @@ marshal.domain = function domain(name, transport) {
     var remoteToLocal = function remoteToLocal(remote) {
         var local = tokenMap[remote] && tokenMap[remote].local;
         if (local === undefined) {
-            var keyPair = encryption.scalarMultiplicationKeyPair(marshal.randomBytes(KEY_LENGTH_IN_BYTES));
-            local = newProxy(remote, keyPair);  // create new proxy function
-            bindLocal(remote, keyPair, local);
+            local = newProxy(remote);  // create new proxy function
+            bindLocal(remote, undefined, local); // remote public key is in "remote" token for now
         }
         return local;
     };
-    var newProxy = function newProxy(remote, keyPair) {
+    var newProxy = function newProxy(remote) {
         return function proxy(message) {
             var ephemeralKeyPair = encryption.scalarMultiplicationKeyPair(marshal.randomBytes(KEY_LENGTH_IN_BYTES));
             var remotePublicKey = Buffer.from(remote.split("#")[1], "base64").slice(10);
