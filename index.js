@@ -31,7 +31,10 @@ OTHER DEALINGS IN THE SOFTWARE.
 "use strict";
 
 var crypto = require("crypto");
+var encryption = require("sodium-encryption");
 var marshal = module.exports;
+
+var NONCE_LENGTH_IN_BYTES = encryption.nonce().length;
 
 marshal.randomBytes = crypto.randomBytes;
 
@@ -47,7 +50,7 @@ marshal.router = function router(defaultRoute) {  // table-based routing transpo
     self.routingTable = {};  // mapping from domains to transports
 
     self.transport = function transport(message) {
-        // { address:<token>, content:<json> }
+        // { address:<token>, content:<base64>, nonce:<base64> }
         var remote = message.address;
         var parsed = remote.split('#');
         if (parsed.length != 2) { throw Error('Bad address format: ' + remote); }
@@ -75,48 +78,62 @@ marshal.domain = function domain(name, transport) {
     var tokenMap = {};
 
     self.receptionist = function endpoint(message) {
-        // { address:<token>, content:<json> }
-        var local = tokenMap[message.address];
+        // { address:<token>, content:<base64>, nonce:<base64> }
+        var local = tokenMap[message.address] && tokenMap[message.address].local;
         if (!local) { throw Error('Unknown address: ' + message.address); }
-        local(decode(message.content));
+        var nonceBuffer = Buffer.from(message.nonce, "base64");
+        var nonce = nonceBuffer.slice(0, NONCE_LENGTH_IN_BYTES);
+        var ephemeralPublicKey = nonceBuffer.slice(NONCE_LENGTH_IN_BYTES);
+        var sharedKey = encryption.scalarMultiplication(tokenMap[message.address].keyPair.secretKey, ephemeralPublicKey);
+        local(decode(encryption.decrypt(Buffer.from(message.content, "base64"), nonce, sharedKey).toString("utf8")));
     };
 
-    var bindLocal = function bindLocal(remote, local) {
-        tokenMap[remote] = local;
+    var bindLocal = function bindLocal(remote, keyPair, local) {
+        tokenMap[remote] = {
+            keyPair,
+            local
+        };
     };
 
     var localToRemote = function localToRemote(local) {
         var remote;
         for (remote in tokenMap) {
-            if (tokenMap[remote] === local) {
+            if (tokenMap[remote] && tokenMap[remote].local === local) {
                 return remote;
             }
         }
         /* not found, create a new entry */
-        remote = generateToken();
-        bindLocal(remote, local);
+        var keyPair = encryption.scalarMultiplicationKeyPair(); // FIXME: re-introduced non-determinism because it bypasses marshal.randomBytes()
+        remote = generateToken(keyPair.publicKey);
+        bindLocal(remote, keyPair, local);
         return remote;
     };
-    var generateToken = function generateToken() {
-        return self.name + '#' + generateCapability();
+    var generateToken = function generateToken(publicKey) {
+        return self.name + '#' + generateCapability(publicKey);
     };
-    var generateCapability = function generateCapability() {
-        return marshal.randomBytes(42).toString('base64');
+    var generateCapability = function generateCapability(publicKey) {
+        return Buffer.concat([marshal.randomBytes(10), publicKey]).toString('base64');
     };
 
     var remoteToLocal = function remoteToLocal(remote) {
-        var local = tokenMap[remote];
+        var local = tokenMap[remote] && tokenMap[remote].local;
         if (local === undefined) {
-            local = newProxy(remote);  // create new proxy function
-            bindLocal(remote, local);
+            var keyPair = encryption.scalarMultiplicationKeyPair(); // FIXME: re-introduced non-determinism because it bypasses marshal.randomBytes()
+            local = newProxy(remote, keyPair);  // create new proxy function
+            bindLocal(remote, keyPair, local);
         }
         return local;
     };
-    var newProxy = function newProxy(remote) {
+    var newProxy = function newProxy(remote, keyPair) {
         return function proxy(message) {
+            var ephemeralKeyPair = encryption.scalarMultiplicationKeyPair(); // FIXME: re-introduced non-determinism because it bypasses marshal.randomBytes()
+            var remotePublicKey = Buffer.from(remote.split("#")[1], "base64").slice(10);
+            var sharedKey = encryption.scalarMultiplication(ephemeralKeyPair.secretKey, remotePublicKey);
+            var nonce = encryption.nonce(); // FIXME: re-introduced non-determinism because it bypasses marshal.randomBytes()
             self.transport({
                 address: remote,
-                content: encode(message)
+                content: encryption.encrypt(Buffer.from(encode(message), "utf8"), nonce, sharedKey).toString("base64"),
+                nonce: Buffer.concat([nonce, ephemeralKeyPair.publicKey]).toString("base64")
             });
         };
     };

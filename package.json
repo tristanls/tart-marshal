@@ -26,6 +26,7 @@
     "nodeunit": "0.10.x"
   },
   "dependencies": {
+    "sodium-encryption": "1.2.2",
     "tart-stepping": "0.2.x",
     "tart": "0.3.x"
   },
