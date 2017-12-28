@@ -205,3 +205,8 @@ Decodes `json` using [domain.decode(json)](#domaindecodejson) and sends the resu
   * `callback`: _Function_ _(Default: undefined)_ `function (error, buffer) {}` Callback to invoke once bytes are generated.
 
 Exposed to allow for replacement in case of need for deterministic testing.
+
+## Notes To Self
+
+* Consider supporting multiple encryption versions (think different TLS versions)
+  * Remember a downgrade canary (sender includes canary that informs its trying older version because previous failure, receiver drops the message if it supports later version)
